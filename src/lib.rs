@@ -1,9 +1,9 @@
 //! Genmidi Library Crate
-//! 
+//!
 //! Devon Fox 2022
 
 use midir::*;
-//use rand::Rng;
+use rand::Rng;
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
 use std::thread::sleep;
@@ -42,13 +42,140 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     };
 
     println!("\nOpening connection");
-    let conn_out = midi_out.connect(out_port, "midir-test")?;
+    let mut conn_out = midi_out.connect(out_port, "midir-test")?;
     println!("Connection open.");
-    // put midi generation menu and/or functions here
+    //arp(&mut conn_out); // currently generating output connection
+    generate_random(&mut conn_out); // currently generating output connection
+                                    // put midi generation menu and/or functions here
     sleep(Duration::from_millis(150));
     println!("\nClosing connection");
     // This is optional, the connection would automatically be closed as soon as it goes out of scope
     conn_out.close();
     println!("Connection closed");
     Ok(())
+}
+
+/// Generates a random arpeggio and updates the mutable output 'connect'
+pub fn generate_arp(connect: &mut MidiOutputConnection) {
+    // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily
+    let mut play_note = |note: u8, duration: u64| {
+        let rand_vel = rand::thread_rng().gen_range(0..100);
+        let _ = connect.send(&[144, note, rand_vel]);
+        sleep(Duration::from_millis(duration * 50));
+        let _ = connect.send(&[128, note, rand_vel]);
+    };
+
+
+    // TODO: Make a single data structure to hold all my chord data;
+    let _pretty_chord: [u8; 5] = [60, 63, 65, 67, 70];
+    let _happy_chord: [u8; 6] = [60, 64, 67, 69, 71, 74];
+    let _a: [u8; 5] = [37, 53, 56, 60, 63];
+    let _b: [u8; 5] = [39, 55, 58, 62, 65];
+    let _c: [u8; 5] = [41, 57, 60, 64, 67];
+
+    sleep(Duration::from_millis(4 * 150));
+    let mut count = 0;
+    loop {
+        for i in 0..4 {
+            sleep(Duration::from_millis(100));
+            // choosing chord here
+            // maybe maybe make 2d vector holding all potential chords
+            play_note(random_note(&_c, i) as u8, 1);
+        }
+        count += 1;
+        if count > 200 {
+            break;
+        }
+    }
+}
+
+/// Generates random notes(within a chord) and updates the mutable output 'connect'
+/// Also, random spacing and velocity
+pub fn generate_random(connect: &mut MidiOutputConnection) {
+    // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily
+    let mut play_note = |note: u8, duration: u64| {
+        let rand_vel = rand::thread_rng().gen_range(0..100);
+        let _ = connect.send(&[144, note, rand_vel]);
+        sleep(Duration::from_millis(
+            duration * rand::thread_rng().gen_range(1..100),
+        ));
+        let _ = connect.send(&[128, note, rand_vel]);
+    };
+
+    // FIX: Redundant
+    let _pretty_chord: [u8; 5] = [60, 63, 65, 67, 70];
+    let happy_chord: [u8; 6] = [60, 64, 67, 69, 71, 74];
+    let _a: [u8; 5] = [37, 53, 56, 60, 63];
+    let _b: [u8; 5] = [39, 55, 58, 62, 65];
+    let _c: [u8; 5] = [41, 57, 60, 64, 67];
+
+    sleep(Duration::from_millis(4 * 150));
+    let mut count = 0;
+    loop {
+        sleep(Duration::from_millis(50));
+        play_note(
+            random_note(&happy_chord, rand::thread_rng().gen_range(0..4)) as u8,
+            2,
+        );
+
+        // not necessary
+        // no concurrency present to stop output on command
+        count += 1;
+        if count > 1000 {
+            break;
+        }
+    }
+}
+
+/// A 'normal' arpeggio (within a chord) and updates the mutable output 'connect'
+/// Also, random velocity
+pub fn arp(connect: &mut MidiOutputConnection) {
+    let mut play_note = |note: u8, duration: u64| {
+        let rand_vel = rand::thread_rng().gen_range(60..100);
+        let _ = connect.send(&[144, note, rand_vel]);
+        sleep(Duration::from_millis(duration * 30));
+        let _ = connect.send(&[128, note, rand_vel]);
+    };
+
+    // FIX: Redundant
+    let _pretty_chord: [u8; 5] = [60, 63, 65, 67, 70];
+    let _happy_chord: [u8; 6] = [60, 64, 67, 69, 71, 74];
+    let _a: [u8; 5] = [37, 53, 56, 60, 63];
+    let _b: [u8; 5] = [39, 55, 58, 62, 65];
+    let _c: [u8; 5] = [41, 57, 60, 64, 67];
+
+    loop {
+        // Maybe use function iterators?
+        let mut count = 0;
+        for i in _a {
+            sleep(Duration::from_millis(100));
+            play_note(i, 2);
+        }
+        for i in _b {
+            sleep(Duration::from_millis(100));
+            play_note(i, 2);
+        }
+        for i in _c {
+            sleep(Duration::from_millis(100));
+            play_note(i, 2);
+        }
+        for i in _b {
+            sleep(Duration::from_millis(100));
+            play_note(i, 2);
+        }
+
+        count += 1;
+        if count > 100 {
+            break;
+        }
+    }
+}
+
+/// Creates a random note given the input note, and uses
+/// the 'variance' to raise or lower the octave when 
+/// generating
+pub fn random_note(frame: &[u8], index: usize) -> i8 {
+    let note: usize = rand::thread_rng().gen_range(0..frame.len());
+    let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
+    frame[note] as i8 + variance[index] // add change in octave to generated note
 }
