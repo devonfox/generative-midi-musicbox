@@ -50,11 +50,12 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // while waiting for user input to stop generation loop
     let _test = spawn(move || {
         println!("Connection open.");
-        //generate_arp(&mut conn_out); // currently generating output connection
-        generate_random(&mut conn_out); // currently generating output connection
+        generate_arp(&mut conn_out); // currently generating output connection
+                                     //generate_random(&mut conn_out); // currently generating output connection
         sleep(Duration::from_millis(150));
     });
     // put midi generation menu and/or functions here
+
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
 
@@ -174,6 +175,7 @@ pub fn arp(connect: &mut MidiOutputConnection) {
 /// the 'variance' to raise or lower the octave when
 /// generating
 pub fn random_note(frame: &[u8], index: usize) -> i8 {
+    assert!(index < 4, "invalid variance index");
     let note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
     frame[note] as i8 + variance[index] // add change in octave to generated note
