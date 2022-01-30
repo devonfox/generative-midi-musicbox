@@ -4,6 +4,8 @@
 
 use generative_midi_musicbox::*;
 
+// prophet patch for ambient testing -> U4 P69
+
 fn main() {
     match run() {
         Ok(_) => (),
