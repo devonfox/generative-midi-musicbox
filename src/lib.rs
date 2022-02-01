@@ -48,7 +48,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     // creating a thread to handle midi output
     // while waiting for user input to stop generation loop
-    let _test = spawn(move || {
+    let _gen_thread = spawn(move || {
         println!("Connection open.");
         generate_arp(&mut conn_out); // currently generating output connection
                                      //generate_random(&mut conn_out); // currently generating output connection
