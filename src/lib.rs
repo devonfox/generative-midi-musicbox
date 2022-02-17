@@ -10,6 +10,10 @@ use std::thread::sleep;
 use std::thread::spawn;
 use std::time::Duration;
 
+enum CHORD {
+    C0 = 1,
+}
+
 /// Scans midi ports and lets user connect to port of choice, if available
 /// If no ports available, returns an error.
 /// Sourced from the 'midir' crate 'test_play.rs' example
@@ -52,7 +56,6 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         println!("Connection open.");
         generate_arp(&mut conn_out); // currently generating output connection
                                      //generate_random(&mut conn_out); // currently generating output connection
-        sleep(Duration::from_millis(150));
     });
     // put midi generation menu and/or functions here
 
@@ -61,7 +64,6 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     sleep(Duration::from_millis(150));
     println!("\nClosing connection");
-    // This is optional, the connection would automatically be closed as soon as it goes out of scope
     //_test.join().unwrap();
     //conn_out.close();
     println!("Connection closed");
@@ -91,7 +93,7 @@ pub fn generate_arp(connect: &mut MidiOutputConnection) {
             sleep(Duration::from_millis(100));
             // choosing chord here
             // maybe maybe make 2d vector holding all potential chords
-            play_note(random_note(&_c, i) as u8, 1);
+            play_note(random_note(&_c, i), 1);
         }
     }
 }
@@ -118,7 +120,7 @@ pub fn generate_random(connect: &mut MidiOutputConnection) {
     loop {
         sleep(Duration::from_millis(50));
         play_note(
-            random_note(&happy_chord, rand::thread_rng().gen_range(0..4)) as u8,
+            random_note(&happy_chord, rand::thread_rng().gen_range(0..4)),
             2,
         );
     }
@@ -174,9 +176,10 @@ pub fn arp(connect: &mut MidiOutputConnection) {
 /// Creates a random note given the input note, and uses
 /// the 'variance' to raise or lower the octave when
 /// generating
-pub fn random_note(frame: &[u8], index: usize) -> i8 {
+pub fn random_note(frame: &[u8], index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
-    let note: usize = rand::thread_rng().gen_range(0..frame.len());
+    let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
-    frame[note] as i8 + variance[index] // add change in octave to generated note
+    let note = frame[base_note] as i8 + variance[index]; // add change in octave to generated note
+    note as u8
 }
