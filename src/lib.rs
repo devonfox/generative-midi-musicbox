@@ -8,8 +8,13 @@ use std::error::Error;
 use std::io::{stdin, stdout, Write};
 use std::thread::sleep;
 use std::thread::spawn;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
+use std::sync::atomic::AtomicBool;
+use std::thread;
 use std::time::Duration;
 
+// decide on an enum convention for chords
 enum CHORD {
     C0 = 1,
 }
@@ -19,7 +24,7 @@ enum CHORD {
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
-
+    let (tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel(); 
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
