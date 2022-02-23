@@ -2,15 +2,17 @@
 //!
 //! Devon Fox 2022
 
+//use queues::*;
+use std::collections::VecDeque;
 use midir::*;
 use midir::{Ignore, MidiInput};
 use rand::Rng;
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, RecvError};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-//use std::sync::mpsc;
-//use std::sync::mpsc::{Receiver, Sender};
 use std::thread::sleep;
 use std::thread::spawn;
 use std::time::Duration;
@@ -22,7 +24,7 @@ use std::time::Duration;
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
-    //let (tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let (tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -49,17 +51,22 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    println!("\nOpening connection");
+    println!("\nOpening output connection");
     let mut conn_out = midi_out.connect(out_port, "midir-test")?;
     let mut input = String::new();
     let atomicstop = Arc::new(AtomicBool::new(false));
     let stopflag = atomicstop.clone();
+    let readflag = atomicstop.clone();
     // creating a thread to handle midi output
     // while waiting for user input to stop generation loop
-    let _gen_thread = spawn(move || {
-        println!("Connection open.");
-        generate_random(&mut conn_out, &stopflag); // currently generating output connection
-                                                   //generate_random(&mut conn_out); // currently generating output connection
+    let gen_thread = spawn(move || {
+        println!("Output connection open.");
+        generate_arp(&mut conn_out, &stopflag, rx); // currently generating output connection
+    });
+
+    let read_thread = spawn(move || match read(tx, &readflag) {
+        Ok(_) => (),
+        Err(err) => println!("Error: {}", err),
     });
     // put midi generation menu and/or functions here
 
@@ -67,16 +74,15 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     stdin().read_line(&mut input)?; // wait for next enter key press
     atomicstop.store(true, Ordering::Relaxed);
     sleep(Duration::from_millis(150));
-    println!("\nClosing connection");
-    //_test.join().unwrap();
+    println!("\nClosing output connection");
+    gen_thread.join().unwrap();
+    read_thread.join().unwrap();
     //conn_out.close();
-    println!("Connection closed");
+    println!("Output connection closed");
     Ok(())
 }
 
-pub fn read() -> Result<(), Box<dyn Error>> {
-    let mut input = String::new();
-
+pub fn read(tx: Sender<u8>, atomicstop: &Arc<AtomicBool>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -106,7 +112,7 @@ pub fn read() -> Result<(), Box<dyn Error>> {
         }
     };
 
-    println!("\nOpening connection");
+    println!("\nOpening input connection");
     let in_port_name = midi_in.port_name(in_port)?;
 
     // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
@@ -115,25 +121,39 @@ pub fn read() -> Result<(), Box<dyn Error>> {
         "midir-read-input",
         move |stamp, message, _| {
             println!("{}: {:?} (len = {})", stamp, message, message.len());
+            if stamp == 144 {
+                
+                //tx.send(message);
+            }
         },
         (),
     )?;
 
     println!(
-        "Connection open, reading input from '{}' (press enter to exit) ...",
+        "Input connection open, reading input from '{}' (press enter to exit) ...",
         in_port_name
     );
 
-    input.clear();
-    stdin().read_line(&mut input)?; // wait for next enter key press
+    loop {
+        if atomicstop.load(Ordering::Relaxed) {
+            break;
+        }
+    }
 
-    println!("Closing connection");
+    println!("Closing input connection");
     Ok(())
 }
 
 /// Generates a random arpeggio and updates the mutable output 'connect'
-pub fn generate_arp(connect: &mut MidiOutputConnection) {
-    // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily
+pub fn generate_arp(
+    connect: &mut MidiOutputConnection,
+    atomicstop: &Arc<AtomicBool>,
+    rx: Receiver<u8>,
+) {
+
+    let mut note_queue: VecDeque<u8> = VecDeque::new();
+
+    // Define a new scope in which the closure `play_note` borrows conn_out
     let mut play_note = |note: u8, duration: u64| {
         let rand_vel = rand::thread_rng().gen_range(0..100);
         let _ = connect.send(&[144, note, rand_vel]);
@@ -150,40 +170,26 @@ pub fn generate_arp(connect: &mut MidiOutputConnection) {
 
     sleep(Duration::from_millis(4 * 150));
     loop {
+        let result = rx.recv();
+            match result {
+                Ok(x) => {
+                    if note_queue.len() == 8 {
+                        let _ = note_queue.pop_back();
+                    }
+                    let _ = note_queue.push_front(x);
+                }
+                Err(RecvError) => break,
+            }
         for i in 0..4 {
             sleep(Duration::from_millis(100));
-            // choosing chord here
-            // maybe maybe make 2d vector holding all potential chords
-            play_note(random_note(&_c, i), 1);
+            
+            
+            if !note_queue.is_empty()
+            {
+                play_note(random_note(&note_queue, i), 1);
+            }
+            
         }
-    }
-}
-
-/// Generates random notes(within a chord) and updates the mutable output 'connect'
-/// Also, random spacing and velocity
-pub fn generate_random(connect: &mut MidiOutputConnection, atomicstop: &Arc<AtomicBool>) {
-    // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily
-    let mut play_note = |note: u8, duration: u64| {
-        let rand_vel = rand::thread_rng().gen_range(0..100);
-        let _ = connect.send(&[144, note, rand_vel]);
-        sleep(Duration::from_millis(
-            duration * rand::thread_rng().gen_range(30..80),
-        ));
-        let _ = connect.send(&[128, note, rand_vel]);
-    };
-
-    // FIX: Redundant
-    let _pretty_chord: [u8; 5] = [60, 63, 65, 67, 70];
-    let happy_chord: [u8; 6] = [60, 64, 67, 69, 71, 74];
-
-    sleep(Duration::from_millis(4 * 150));
-    //let mut count = 0;
-    loop {
-        sleep(Duration::from_millis(100));
-        play_note(
-            random_note(&happy_chord, rand::thread_rng().gen_range(0..4)),
-            2,
-        );
         if atomicstop.load(Ordering::Relaxed) {
             break;
         }
@@ -193,7 +199,7 @@ pub fn generate_random(connect: &mut MidiOutputConnection, atomicstop: &Arc<Atom
 /// Creates a random note given the input note, and uses
 /// the 'variance' to raise or lower the octave when
 /// generating
-pub fn random_note(frame: &[u8], index: usize) -> u8 {
+pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
     let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
