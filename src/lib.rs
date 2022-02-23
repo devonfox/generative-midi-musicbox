@@ -3,28 +3,26 @@
 //! Devon Fox 2022
 
 use midir::*;
+use midir::{Ignore, MidiInput};
 use rand::Rng;
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+//use std::sync::mpsc;
+//use std::sync::mpsc::{Receiver, Sender};
 use std::thread::sleep;
 use std::thread::spawn;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::mpsc;
-use std::sync::atomic::AtomicBool;
-use std::thread;
 use std::time::Duration;
 
-// decide on an enum convention for chords
-enum CHORD {
-    C0 = 1,
-}
+// TODO: decide on an enum convention for chords
 
 /// Scans midi ports and lets user connect to port of choice, if available
 /// If no ports available, returns an error.
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
-    let (tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel(); 
+    //let (tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -54,24 +52,82 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     println!("\nOpening connection");
     let mut conn_out = midi_out.connect(out_port, "midir-test")?;
     let mut input = String::new();
-
+    let atomicstop = Arc::new(AtomicBool::new(false));
+    let stopflag = atomicstop.clone();
     // creating a thread to handle midi output
     // while waiting for user input to stop generation loop
     let _gen_thread = spawn(move || {
         println!("Connection open.");
-        generate_arp(&mut conn_out); // currently generating output connection
-                                     //generate_random(&mut conn_out); // currently generating output connection
+        generate_random(&mut conn_out, &stopflag); // currently generating output connection
+                                                   //generate_random(&mut conn_out); // currently generating output connection
     });
     // put midi generation menu and/or functions here
 
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
-
+    atomicstop.store(true, Ordering::Relaxed);
     sleep(Duration::from_millis(150));
     println!("\nClosing connection");
     //_test.join().unwrap();
     //conn_out.close();
     println!("Connection closed");
+    Ok(())
+}
+
+pub fn read() -> Result<(), Box<dyn Error>> {
+    let mut input = String::new();
+
+    let mut midi_in = MidiInput::new("midir reading input")?;
+    midi_in.ignore(Ignore::None);
+
+    // Get an input port (read from console if multiple are available)
+    let in_ports = midi_in.ports();
+    let in_port = match in_ports.len() {
+        0 => return Err("no input port found".into()),
+        1 => {
+            println!(
+                "Choosing the only available input port: {}",
+                midi_in.port_name(&in_ports[0]).unwrap()
+            );
+            &in_ports[0]
+        }
+        _ => {
+            println!("\nAvailable input ports:");
+            for (i, p) in in_ports.iter().enumerate() {
+                println!("{}: {}", i, midi_in.port_name(p).unwrap());
+            }
+            print!("Please select input port: ");
+            stdout().flush()?;
+            let mut input = String::new();
+            stdin().read_line(&mut input)?;
+            in_ports
+                .get(input.trim().parse::<usize>()?)
+                .ok_or("invalid input port selected")?
+        }
+    };
+
+    println!("\nOpening connection");
+    let in_port_name = midi_in.port_name(in_port)?;
+
+    // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
+    let _conn_in = midi_in.connect(
+        in_port,
+        "midir-read-input",
+        move |stamp, message, _| {
+            println!("{}: {:?} (len = {})", stamp, message, message.len());
+        },
+        (),
+    )?;
+
+    println!(
+        "Connection open, reading input from '{}' (press enter to exit) ...",
+        in_port_name
+    );
+
+    input.clear();
+    stdin().read_line(&mut input)?; // wait for next enter key press
+
+    println!("Closing connection");
     Ok(())
 }
 
@@ -105,13 +161,13 @@ pub fn generate_arp(connect: &mut MidiOutputConnection) {
 
 /// Generates random notes(within a chord) and updates the mutable output 'connect'
 /// Also, random spacing and velocity
-pub fn generate_random(connect: &mut MidiOutputConnection) {
+pub fn generate_random(connect: &mut MidiOutputConnection, atomicstop: &Arc<AtomicBool>) {
     // Define a new scope in which the closure `play_note` borrows conn_out, so it can be called easily
     let mut play_note = |note: u8, duration: u64| {
         let rand_vel = rand::thread_rng().gen_range(0..100);
         let _ = connect.send(&[144, note, rand_vel]);
         sleep(Duration::from_millis(
-            duration * rand::thread_rng().gen_range(1..100),
+            duration * rand::thread_rng().gen_range(30..80),
         ));
         let _ = connect.send(&[128, note, rand_vel]);
     };
@@ -123,57 +179,13 @@ pub fn generate_random(connect: &mut MidiOutputConnection) {
     sleep(Duration::from_millis(4 * 150));
     //let mut count = 0;
     loop {
-        sleep(Duration::from_millis(50));
+        sleep(Duration::from_millis(100));
         play_note(
             random_note(&happy_chord, rand::thread_rng().gen_range(0..4)),
             2,
         );
-    }
-}
-
-/// A 'normal' arpeggio (within a chord) and updates the mutable output 'connect'
-/// Also, random velocity
-pub fn arp(connect: &mut MidiOutputConnection) {
-    let mut play_note = |note: u8, duration: u64| {
-        let rand_vel = rand::thread_rng().gen_range(60..100);
-        let _ = connect.send(&[144, note, rand_vel]);
-        sleep(Duration::from_millis(duration * 30));
-        let _ = connect.send(&[128, note, rand_vel]);
-    };
-
-    // FIX: Redundant
-    let _pretty_chord: [u8; 5] = [60, 63, 65, 67, 70];
-    let _happy_chord: [u8; 6] = [60, 64, 67, 69, 71, 74];
-    let _a: [u8; 5] = [37, 53, 56, 60, 63];
-    let _b: [u8; 5] = [39, 55, 58, 62, 65];
-    let _c: [u8; 5] = [41, 57, 60, 64, 67];
-
-    loop {
-        // Maybe use function iterators?
-
-        for _i in 0..5 {
-            for j in _a {
-                sleep(Duration::from_millis(100));
-                play_note(j, 2);
-            }
-        }
-        for _i in 0..5 {
-            for j in _b {
-                sleep(Duration::from_millis(100));
-                play_note(j, 2);
-            }
-        }
-        for _i in 0..5 {
-            for j in _c {
-                sleep(Duration::from_millis(100));
-                play_note(j, 2);
-            }
-        }
-        for _i in 0..5 {
-            for j in _b {
-                sleep(Duration::from_millis(100));
-                play_note(j, 2);
-            }
+        if atomicstop.load(Ordering::Relaxed) {
+            break;
         }
     }
 }
