@@ -5,7 +5,7 @@ A Rust library/binary crate that sends looping randomly generated midi signals w
 ## Planning and Implementation
 
 * [ ] Create enum to match note data with name
-* [ ] Atomic Boolean
+* [x] Atomic Boolean
 * [ ] Unravel Channels
 * [ ] Transfer notes from receiving midi data to sending thread
 * [ ] Fill out README a bit more
