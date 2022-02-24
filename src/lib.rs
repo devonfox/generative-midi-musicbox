@@ -3,19 +3,23 @@
 //! Devon Fox 2022
 
 //use queues::*;
-use std::collections::VecDeque;
 use midir::*;
 use midir::{Ignore, MidiInput};
 use rand::Rng;
+use std::collections::VecDeque;
+use std::convert::TryFrom;
 use std::error::Error;
 use std::io::{stdin, stdout, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, RecvError};
+use std::sync::mpsc::*;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::spawn;
 use std::time::Duration;
+use wmidi::MidiMessage::*;
+use wmidi::*;
+//use std::error::Error;
 
 // TODO: decide on an enum convention for chords
 
@@ -24,7 +28,7 @@ use std::time::Duration;
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
-    let (tx, rx): (Sender<u8>, Receiver<u8>) = mpsc::channel();
+    let (tx, rx): (Sender<Note>, Receiver<Note>) = channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -56,7 +60,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let mut input = String::new();
     let atomicstop = Arc::new(AtomicBool::new(false));
     let stopflag = atomicstop.clone();
-    let readflag = atomicstop.clone();
+    //let readflag = atomicstop.clone();
     // creating a thread to handle midi output
     // while waiting for user input to stop generation loop
     let gen_thread = spawn(move || {
@@ -64,7 +68,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         generate_arp(&mut conn_out, &stopflag, rx); // currently generating output connection
     });
 
-    let read_thread = spawn(move || match read(tx, &readflag) {
+    let read_thread = spawn(move || match read(tx) {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),
     });
@@ -82,7 +86,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn read(tx: Sender<u8>, atomicstop: &Arc<AtomicBool>) -> Result<(), Box<dyn Error>> {
+pub fn read(tx: Sender<Note>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -119,27 +123,31 @@ pub fn read(tx: Sender<u8>, atomicstop: &Arc<AtomicBool>) -> Result<(), Box<dyn 
     let _conn_in = midi_in.connect(
         in_port,
         "midir-read-input",
-        move |stamp, message, _| {
-            println!("{}: {:?} (len = {})", stamp, message, message.len());
-            if stamp == 144 {
-                
-                //tx.send(message);
+        move |_, message, _| {
+            //println!("{:?} (len = {})", message, message.len());
+            let message = MidiMessage::try_from(message).unwrap();
+            if let NoteOn(_, note, _) = message {
+                let _ = tx.send(note);
             }
         },
         (),
     )?;
 
     println!(
-        "Input connection open, reading input from '{}' (press enter to exit) ...",
+        "Input connection open, reading input from '{}' (press enter to stop input) ...",
         in_port_name
     );
 
-    loop {
-        if atomicstop.load(Ordering::Relaxed) {
-            break;
-        }
-    }
-
+    //FIX: get rid of spinnnn
+    // loop {
+    //     if atomicstop.load(Ordering::Relaxed) {
+    //         break;
+    //     }
+    // }
+    stdout().flush()?;
+    let mut input = String::new();
+    stdin().read_line(&mut input)?;
+    //std::mem::forget(conn_in);
     println!("Closing input connection");
     Ok(())
 }
@@ -148,9 +156,8 @@ pub fn read(tx: Sender<u8>, atomicstop: &Arc<AtomicBool>) -> Result<(), Box<dyn 
 pub fn generate_arp(
     connect: &mut MidiOutputConnection,
     atomicstop: &Arc<AtomicBool>,
-    rx: Receiver<u8>,
+    rx: Receiver<Note>,
 ) {
-
     let mut note_queue: VecDeque<u8> = VecDeque::new();
 
     // Define a new scope in which the closure `play_note` borrows conn_out
@@ -162,33 +169,24 @@ pub fn generate_arp(
     };
 
     // TODO: Make a single data structure to hold all my chord data;
-    let _pretty_chord: [u8; 5] = [60, 63, 65, 67, 70];
-    let _happy_chord: [u8; 6] = [60, 64, 67, 69, 71, 74];
-    let _a: [u8; 5] = [37, 53, 56, 60, 63];
-    let _b: [u8; 5] = [39, 55, 58, 62, 65];
-    let _c: [u8; 5] = [41, 57, 60, 64, 67];
+    //let _pretty_chord = vecdeque![60, 63, 65, 67, 70];
 
     sleep(Duration::from_millis(4 * 150));
     loop {
-        let result = rx.recv();
-            match result {
-                Ok(x) => {
-                    if note_queue.len() == 8 {
-                        let _ = note_queue.pop_back();
-                    }
-                    let _ = note_queue.push_front(x);
-                }
-                Err(RecvError) => break,
+        let result = rx.try_recv();
+        if let Ok(x) = result {
+            println!("Debug: Note -> {}, Size: {}", x, note_queue.len());
+            if note_queue.len() == 8 {
+                let _ = note_queue.pop_back();
             }
+            let _ = note_queue.push_front(x as u8);
+        }
         for i in 0..4 {
             sleep(Duration::from_millis(100));
-            
-            
-            if !note_queue.is_empty()
-            {
+
+            if !note_queue.is_empty() {
                 play_note(random_note(&note_queue, i), 1);
             }
-            
         }
         if atomicstop.load(Ordering::Relaxed) {
             break;
