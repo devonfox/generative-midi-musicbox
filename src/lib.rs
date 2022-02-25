@@ -24,7 +24,12 @@ use wmidi::*;
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("My Test Output")?;
+
+    // channel for sending midi notes
     let (tx, rx): (Sender<Note>, Receiver<Note>) = channel();
+
+    let (end_tx, end_rx): (Sender<()>, Receiver<()>) = channel();
+
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -56,7 +61,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let mut input = String::new();
     let atomicstop = Arc::new(AtomicBool::new(false));
     let stopflag = atomicstop.clone();
-    //let readflag = atomicstop.clone();
+
     // creating a thread to handle midi output
     // while waiting for user input to stop generation loop
     let gen_thread = spawn(move || {
@@ -64,7 +69,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         generate_arp(&mut conn_out, &stopflag, rx); // currently generating output connection
     });
 
-    let read_thread = spawn(move || match read(tx) {
+    let read_thread = spawn(move || match read(tx, end_rx) {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),
     });
@@ -72,9 +77,14 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
+
+    // signal with atomic to stop receiving, and sending as well
     atomicstop.store(true, Ordering::Relaxed);
-    sleep(Duration::from_millis(150));
+    let _ = end_tx.send(()); // sending unit () to signal end via channel
+    sleep(Duration::from_millis(150)); // why tf did i put this here
     println!("\nClosing output connection");
+
+    // join send/receiving threads before quitting
     gen_thread.join().unwrap();
     read_thread.join().unwrap();
     //conn_out.close();
@@ -85,7 +95,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 /// Reads midi input and sends the midi notes parsed from midi messages through
 /// channels to our output midi function operating in a separate thread.
 ///
-pub fn read(tx: Sender<Note>) -> Result<(), Box<dyn Error>> {
+pub fn read(tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
 
@@ -136,17 +146,9 @@ pub fn read(tx: Sender<Note>) -> Result<(), Box<dyn Error>> {
         in_port_name
     );
 
-    //FIX: get rid of spinnnn
-    // loop {
-    //     if atomicstop.load(Ordering::Relaxed) {
-    //         break;
-    //     }
-    // }
-
-    // Using extra
-    stdout().flush()?;
-    let mut input = String::new();
-    stdin().read_line(&mut input)?;
+    // Consider using channel that receives () here to block movement with
+    // use of a spin
+    let _ = end_rx.recv();
 
     //std::mem::forget(input_connection); // do I need this? Won't shutdown with it
     println!("Closing input connection");
@@ -170,7 +172,7 @@ pub fn generate_arp(
         let _ = connect.send(&[128, note, rand_vel]);
     };
 
-    sleep(Duration::from_millis(4 * 150));
+    sleep(Duration::from_millis(4 * 150)); // small pause
     loop {
         // Try_recv() doesn't block when there is failed recv,
         // and allows playing to continue while waiting for more
@@ -186,8 +188,9 @@ pub fn generate_arp(
         if !note_queue.is_empty() {
             for i in 0..4 {
                 sleep(Duration::from_millis(100));
+
+                // consider creating a variable to change
                 play_note(random_note(&note_queue, i), 1);
-                
             }
         }
         if atomicstop.load(Ordering::Relaxed) {
