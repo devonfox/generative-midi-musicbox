@@ -1,4 +1,4 @@
-//! Channel = Atomic Boolean example I wrote after lecture this week
+//! Channel + Atomic Boolean example I wrote after lecture this week
 //! Devon Fox - Feb 2022
 //!
 
