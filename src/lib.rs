@@ -2,7 +2,6 @@
 //!
 //! Devon Fox 2022
 
-//use queues::*;
 use midir::*;
 use midir::{Ignore, MidiInput};
 use rand::Rng;
@@ -19,9 +18,6 @@ use std::thread::spawn;
 use std::time::Duration;
 use wmidi::MidiMessage::*;
 use wmidi::*;
-//use std::error::Error;
-
-// TODO: decide on an enum convention for chords
 
 /// Scans midi ports and lets user connect to port of choice, if available
 /// If no ports available, returns an error.
@@ -86,6 +82,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+/// Reads midi input and sends the midi notes parsed from midi messages through
+/// channels to our output midi function operating in a separate thread.
+///
 pub fn read(tx: Sender<Note>) -> Result<(), Box<dyn Error>> {
     let mut midi_in = MidiInput::new("midir reading input")?;
     midi_in.ignore(Ignore::None);
@@ -119,15 +118,14 @@ pub fn read(tx: Sender<Note>) -> Result<(), Box<dyn Error>> {
     println!("\nOpening input connection");
     let in_port_name = midi_in.port_name(in_port)?;
 
-    // _conn_in needs to be a named parameter, because it needs to be kept alive until the end of the scope
-    let _conn_in = midi_in.connect(
+    let _input_connection = midi_in.connect(
         in_port,
         "midir-read-input",
         move |_, message, _| {
             //println!("{:?} (len = {})", message, message.len());
-            let message = MidiMessage::try_from(message).unwrap();
+            let message = MidiMessage::try_from(message).unwrap(); //unwrapping message slice
             if let NoteOn(_, note, _) = message {
-                let _ = tx.send(note);
+                let _ = tx.send(note); // sending note value through channel
             }
         },
         (),
@@ -144,10 +142,13 @@ pub fn read(tx: Sender<Note>) -> Result<(), Box<dyn Error>> {
     //         break;
     //     }
     // }
+
+    // Using extra
     stdout().flush()?;
     let mut input = String::new();
     stdin().read_line(&mut input)?;
-    //std::mem::forget(conn_in);
+
+    //std::mem::forget(input_connection); // do I need this? Won't shutdown with it
     println!("Closing input connection");
     Ok(())
 }
@@ -158,6 +159,7 @@ pub fn generate_arp(
     atomicstop: &Arc<AtomicBool>,
     rx: Receiver<Note>,
 ) {
+    // A data structure used to hold our FIFO 8 note collection
     let mut note_queue: VecDeque<u8> = VecDeque::new();
 
     // Define a new scope in which the closure `play_note` borrows conn_out
@@ -168,11 +170,11 @@ pub fn generate_arp(
         let _ = connect.send(&[128, note, rand_vel]);
     };
 
-    // TODO: Make a single data structure to hold all my chord data;
-    //let _pretty_chord = vecdeque![60, 63, 65, 67, 70];
-
     sleep(Duration::from_millis(4 * 150));
     loop {
+        // Try_recv() doesn't block when there is failed recv,
+        // and allows playing to continue while waiting for more
+        // notes through channel
         let result = rx.try_recv();
         if let Ok(x) = result {
             println!("Debug: Note -> {}, Size: {}", x, note_queue.len());
@@ -181,11 +183,11 @@ pub fn generate_arp(
             }
             let _ = note_queue.push_front(x as u8);
         }
-        for i in 0..4 {
-            sleep(Duration::from_millis(100));
-
-            if !note_queue.is_empty() {
+        if !note_queue.is_empty() {
+            for i in 0..4 {
+                sleep(Duration::from_millis(100));
                 play_note(random_note(&note_queue, i), 1);
+                
             }
         }
         if atomicstop.load(Ordering::Relaxed) {
