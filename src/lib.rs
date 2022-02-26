@@ -58,7 +58,6 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     println!("\nOpening output connection");
     let mut conn_out = midi_out.connect(out_port, "midir-test")?;
-    let mut input = String::new();
     let atomicstop = Arc::new(AtomicBool::new(false));
     let stopflag = atomicstop.clone();
 
@@ -74,18 +73,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         Err(err) => println!("Error: {}", err),
     });
     // put midi generation menu and/or functions here
-    loop {
-        let mut count = 0;
-        let duration = Duration::from_secs(120);
-        sleep(duration);
-        count += 1;
-        if count == 20
-        {
-            break;
-        }
-    }
-    input.clear();
-    stdin().read_line(&mut input)?; // wait for next enter key press
+    
+    let mut quit = String::new();
+    stdin().read_line(&mut quit)?; // wait for next enter key press
 
     // signal with atomic to stop receiving, and sending as well
     atomicstop.store(true, Ordering::Relaxed);
