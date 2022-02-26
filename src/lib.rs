@@ -74,7 +74,16 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         Err(err) => println!("Error: {}", err),
     });
     // put midi generation menu and/or functions here
-
+    loop {
+        let mut count = 0;
+        let duration = Duration::from_secs(120);
+        sleep(duration);
+        count += 1;
+        if count == 20
+        {
+            break;
+        }
+    }
     input.clear();
     stdin().read_line(&mut input)?; // wait for next enter key press
 
