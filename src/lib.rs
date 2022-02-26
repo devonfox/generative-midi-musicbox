@@ -73,9 +73,9 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         Err(err) => println!("Error: {}", err),
     });
     // put midi generation menu and/or functions here
-    
-    let mut quit = String::new();
-    stdin().read_line(&mut quit)?; // wait for next enter key press
+    let mut input = String::new();
+    let stdin = stdin();
+    stdin.read_line(&mut input)?; // wait for next enter key press
 
     // signal with atomic to stop receiving, and sending as well
     atomicstop.store(true, Ordering::Relaxed);
@@ -101,7 +101,12 @@ pub fn read(tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>
     // Get an input port (read from console if multiple are available)
     let in_ports = midi_in.ports();
     let in_port = match in_ports.len() {
-        0 => return Err("no input port found".into()),
+        0 => {
+            println!("Error: No input connection found. Press enter to quit.");
+            let error = Err("closing connections.".into());
+            let _ = end_rx.recv();
+            return error
+            }
         1 => {
             println!(
                 "Choosing the only available input port: {}",
