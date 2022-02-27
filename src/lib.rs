@@ -78,15 +78,15 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     stdin.read_line(&mut input)?; // wait for next enter key press
 
     // signal with atomic to stop receiving, and sending as well
-    atomicstop.store(true, Ordering::Relaxed);
     let _ = end_tx.send(()); // sending unit () to signal end via channel
+    atomicstop.store(true, Ordering::Relaxed);
     sleep(Duration::from_millis(150)); // why tf did i put this here
     println!("\nClosing output connection");
 
     // join send/receiving threads before quitting
     gen_thread.join().unwrap();
     read_thread.join().unwrap();
-    //conn_out.close();
+
     println!("Output connection closed");
     Ok(())
 }
@@ -105,8 +105,8 @@ pub fn read(tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>
             println!("Error: No input connection found. Press enter to quit.");
             let error = Err("closing connections.".into());
             let _ = end_rx.recv();
-            return error
-            }
+            return error;
+        }
         1 => {
             println!(
                 "Choosing the only available input port: {}",
@@ -124,7 +124,7 @@ pub fn read(tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>
             let mut input = String::new();
             stdin().read_line(&mut input)?;
             in_ports
-                .get(input.trim().parse::<usize>()?)
+                .get(input.trim().parse::<usize>()?) // investigate
                 .ok_or("invalid input port selected")?
         }
     };
@@ -172,7 +172,7 @@ pub fn generate_arp(
     let mut play_note = |note: u8, duration: u64| {
         let rand_vel = rand::thread_rng().gen_range(0..100);
         let _ = connect.send(&[144, note, rand_vel]);
-        sleep(Duration::from_millis(duration * 50));
+        sleep(Duration::from_millis(duration * 100));
         let _ = connect.send(&[128, note, rand_vel]);
     };
 
