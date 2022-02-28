@@ -80,12 +80,18 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // signal with atomic to stop receiving, and sending as well
     let _ = end_tx.send(()); // sending unit () to signal end via channel
     atomicstop.store(true, Ordering::Relaxed);
-    sleep(Duration::from_millis(150)); // why tf did i put this here
+    //sleep(Duration::from_millis(150)); // why tf did i put this here
     println!("\nClosing output connection");
 
     // join send/receiving threads before quitting
-    gen_thread.join().unwrap();
-    read_thread.join().unwrap();
+    match gen_thread.join() {
+        Ok(_) => println!("Debug: Gen_thread successfully joined."),
+        Err(error) => println!("Error: {:?}", error),
+    };
+    match read_thread.join() {
+        Ok(_) => println!("Debug: Read_thread successfully joined."),
+        Err(error) => println!("Error: {:?}", error),
+    }
 
     println!("Output connection closed");
     Ok(())
