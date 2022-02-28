@@ -75,7 +75,11 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // put midi generation menu and/or functions here
     let mut input = String::new();
     let stdin = stdin();
-    stdin.read_line(&mut input)?; // wait for next enter key press
+    input.clear();
+    match stdin.read_line(&mut input) {
+        Ok(x) => println!("Success: {}", x),
+        Err(err) => println!("End Error: {}", err),
+    }; // wait for next enter key press
 
     // signal with atomic to stop receiving, and sending as well
     let _ = end_tx.send(()); // sending unit () to signal end via channel
