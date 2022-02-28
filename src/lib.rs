@@ -131,10 +131,10 @@ pub fn read(tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>
             }
             print!("Please select input port: ");
             stdout().flush()?;
-            let mut input = String::new();
-            stdin().read_line(&mut input)?;
+            //let mut input = String::new();
+            //stdin().read_line(&mut input)?;
             in_ports
-                .get(input.trim().parse::<usize>()?) // investigate
+                .get(1) // investigate
                 .ok_or("invalid input port selected")?
         }
     };
