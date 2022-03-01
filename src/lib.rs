@@ -61,6 +61,41 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let atomicstop = Arc::new(AtomicBool::new(false));
     let stopflag = atomicstop.clone();
 
+    // Get an input port (read from console if multiple are available)
+    let mut midi_in = MidiInput::new("midir reading input")?;
+    let in_ports = midi_in.ports();
+    let in_port = match in_ports.len() {
+        0 => {
+            println!("Error: No input connection found. Press enter to quit.");
+            let error = Err("closing connections.".into());
+            let _ = end_rx.recv();
+            return error;
+        }
+        1 => {
+            println!(
+                "Choosing the only available input port: {}",
+                midi_in.port_name(&in_ports[0]).unwrap()
+            );
+            &in_ports[0]
+        }
+        _ => {
+            println!("\nAvailable input ports:");
+            for (i, p) in in_ports.iter().enumerate() {
+                println!("{}: {}", i, midi_in.port_name(p).unwrap());
+            }
+            print!("Please select input port: ");
+            stdout().flush()?;
+            let mut input = String::new();
+            stdin().read_line(&mut input)?;
+            in_ports
+                .get(input.trim().parse::<usize>()?) // investigate
+                .ok_or("invalid input port selected")?
+        }
+    };
+    midi_in.ignore(Ignore::None);
+    let in_port_name = midi_in.port_name(in_port)?;
+    let in_port = in_port.clone();
+
     // creating a thread to handle midi output
     // while waiting for user input to stop generation loop
     let gen_thread = spawn(move || {
@@ -68,7 +103,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         generate_arp(&mut conn_out, &stopflag, rx); // currently generating output connection
     });
 
-    let read_thread = spawn(move || match read(tx, end_rx) {
+    let read_thread = spawn(move || match read(&in_port_name, in_port, midi_in, tx, end_rx) {
         Ok(_) => (),
         Err(err) => println!("Error: {}", err),
     });
@@ -104,46 +139,10 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 /// Reads midi input and sends the midi notes parsed from midi messages through
 /// channels to our output midi function operating in a separate thread.
 ///
-pub fn read(tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>> {
-    let mut midi_in = MidiInput::new("midir reading input")?;
-    midi_in.ignore(Ignore::None);
-
-    // Get an input port (read from console if multiple are available)
-    let in_ports = midi_in.ports();
-    let in_port = match in_ports.len() {
-        0 => {
-            println!("Error: No input connection found. Press enter to quit.");
-            let error = Err("closing connections.".into());
-            let _ = end_rx.recv();
-            return error;
-        }
-        1 => {
-            println!(
-                "Choosing the only available input port: {}",
-                midi_in.port_name(&in_ports[0]).unwrap()
-            );
-            &in_ports[0]
-        }
-        _ => {
-            println!("\nAvailable input ports:");
-            for (i, p) in in_ports.iter().enumerate() {
-                println!("{}: {}", i, midi_in.port_name(p).unwrap());
-            }
-            print!("Please select input port: ");
-            stdout().flush()?;
-            let mut input = String::new();
-            stdin().read_line(&mut input)?;
-            in_ports
-                .get(input.trim().parse::<usize>()?) // investigate
-                .ok_or("invalid input port selected")?
-        }
-    };
-
+pub fn read(in_port_name: &str, in_port: MidiInputPort, midi_in: MidiInput, tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>> {
     println!("\nOpening input connection");
-    let in_port_name = midi_in.port_name(in_port)?;
-
     let _input_connection = midi_in.connect(
-        in_port,
+        &in_port,
         "midir-read-input",
         move |_, message, _| {
             //println!("{:?} (len = {})", message, message.len());
