@@ -23,11 +23,12 @@ use wmidi::*;
 /// If no ports available, returns an error.
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
-    let midi_out = MidiOutput::new("My Test Output")?;
+    let midi_out = MidiOutput::new("Main MIDI Output")?;
 
     // channel for sending midi notes
     let (tx, rx): (Sender<Note>, Receiver<Note>) = channel();
 
+    // channel for sending stop unit message
     let (end_tx, end_rx): (Sender<()>, Receiver<()>) = channel();
 
     // Get an output port (read from console if multiple are available)
@@ -103,17 +104,19 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         generate_arp(&mut conn_out, &stopflag, rx); // currently generating output connection
     });
 
-    let read_thread = spawn(move || match read(&in_port_name, in_port, midi_in, tx, end_rx) {
-        Ok(_) => (),
-        Err(err) => println!("Error: {}", err),
-    });
+    let read_thread = spawn(
+        move || match read(&in_port_name, in_port, midi_in, tx, end_rx) {
+            Ok(_) => (),
+            Err(err) => println!("Error: {}", err),
+        },
+    );
     // put midi generation menu and/or functions here
     let mut input = String::new();
     let stdin = stdin();
     input.clear();
     match stdin.read_line(&mut input) {
-        Ok(x) => println!("Success: {}", x),
-        Err(err) => println!("End Error: {}", err),
+        Ok(_) => println!("Ending program..."),
+        Err(err) => println!("Error: {}", err),
     }; // wait for next enter key press
 
     // signal with atomic to stop receiving, and sending as well
@@ -139,9 +142,15 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 /// Reads midi input and sends the midi notes parsed from midi messages through
 /// channels to our output midi function operating in a separate thread.
 ///
-pub fn read(in_port_name: &str, in_port: MidiInputPort, midi_in: MidiInput, tx: Sender<Note>, end_rx: Receiver<()>) -> Result<(), Box<dyn Error>> {
+pub fn read(
+    in_port_name: &str,
+    in_port: MidiInputPort,
+    midi_in: MidiInput,
+    tx: Sender<Note>,
+    end_rx: Receiver<()>,
+) -> Result<(), Box<dyn Error>> {
     println!("\nOpening input connection");
-    let _input_connection = midi_in.connect(
+    let input_connection = midi_in.connect(
         &in_port,
         "midir-read-input",
         move |_, message, _| {
@@ -159,11 +168,8 @@ pub fn read(in_port_name: &str, in_port: MidiInputPort, midi_in: MidiInput, tx: 
         in_port_name
     );
 
-    // Consider using channel that receives () here to block movement with
-    // use of a spin
     let _ = end_rx.recv();
-
-    //std::mem::forget(input_connection); // do I need this? Won't shutdown with it
+    input_connection.close();
     println!("Closing input connection");
     Ok(())
 }
@@ -177,11 +183,10 @@ pub fn generate_arp(
     // A data structure used to hold our FIFO 8 note collection
     let mut note_queue: VecDeque<u8> = VecDeque::new();
 
-    // Define a new scope in which the closure `play_note` borrows conn_out
-    let mut play_note = |note: u8, duration: u64| {
+    let mut play_note = |note: u8| {
         let rand_vel = rand::thread_rng().gen_range(0..100);
         let _ = connect.send(&[144, note, rand_vel]);
-        sleep(Duration::from_millis(duration * 100));
+        sleep(Duration::from_millis(100));
         let _ = connect.send(&[128, note, rand_vel]);
     };
 
@@ -191,19 +196,19 @@ pub fn generate_arp(
         // and allows playing to continue while waiting for more
         // notes through channel
         let result = rx.try_recv();
-        if let Ok(x) = result {
-            println!("Debug: Note -> {}, Size: {}", x, note_queue.len());
+        if let Ok(note) = result {
+            println!("Debug: Note -> {}, Deque Size: {}", note, note_queue.len());
             if note_queue.len() == 8 {
                 let _ = note_queue.pop_back();
             }
-            let _ = note_queue.push_front(x as u8);
+            let _ = note_queue.push_front(note as u8);
         }
         if !note_queue.is_empty() {
-            for i in 0..4 {
+            for variance in 0..4 {
                 sleep(Duration::from_millis(100));
 
                 // consider creating a variable to change
-                play_note(random_note(&note_queue, i), 1);
+                play_note(random_note(&note_queue, variance));
             }
         }
         if atomicstop.load(Ordering::Relaxed) {
@@ -219,6 +224,7 @@ pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
     let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
+    //here make sure value doesn't exceed potential values
     let note = frame[base_note] as i8 + variance[index]; // add change in octave to generated note
     note as u8
 }
