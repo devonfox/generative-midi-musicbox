@@ -6,7 +6,7 @@ A Rust library/binary crate that sends looping randomly generated MIDI signals d
 
 * [Midir 0.7.0](https://crates.io/crates/midir) - Create MIDI input and output connections
 * [Wmidi 4.0.4](https://crates.io/crates/wmidi) - Enum data for manipulating MIDI messages
-* Rand - Random Number Generation
+* [Rand 0.8.3](https://crates.io/crates/rand) - Random Number Generation
 
 ## Build and Run instructions
 
@@ -33,3 +33,6 @@ A Rust library/binary crate that sends looping randomly generated MIDI signals d
 ## Stretch Goals
 * [ ] Create midi message stop condition instead of keyboard input of 'enter'
 * [ ] Implement control over speed of randomly generated arpeggio
+* [ ] Expand Arpeggiator features (i.e. varying styles)
+
+## 
