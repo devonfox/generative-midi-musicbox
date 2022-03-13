@@ -24,13 +24,10 @@ use wmidi::*;
 /// Sourced from the 'midir' crate 'test_play.rs' example
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("Main MIDI Output")?;
-
     // channel for sending midi notes
     let (tx, rx): (Sender<Note>, Receiver<Note>) = channel();
-
     // channel for sending stop unit message
     let (end_tx, end_rx): (Sender<()>, Receiver<()>) = channel();
-
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -127,14 +124,13 @@ pub fn run() -> Result<(), Box<dyn Error>> {
 
     // join send/receiving threads before quitting
     match gen_thread.join() {
-        Ok(_) => println!("Debug: Gen_thread successfully joined."),
+        Ok(_) => (),
         Err(error) => println!("Error: {:?}", error),
     };
     match read_thread.join() {
-        Ok(_) => println!("Debug: Read_thread successfully joined."),
+        Ok(_) => (),
         Err(error) => println!("Error: {:?}", error),
     }
-
     println!("Output connection closed");
     Ok(())
 }
@@ -186,11 +182,12 @@ pub fn generate_arp(
     let mut play_note = |note: u8| {
         let rand_vel = rand::thread_rng().gen_range(0..100);
         let _ = connect.send(&[144, note, rand_vel]);
+        // note length
         sleep(Duration::from_millis(100));
         let _ = connect.send(&[128, note, rand_vel]);
     };
 
-    sleep(Duration::from_millis(4 * 150)); // small pause
+    sleep(Duration::from_millis(500)); // small pause
     loop {
         // Try_recv() doesn't block when there is failed recv,
         // and allows playing to continue while waiting for more
@@ -205,9 +202,9 @@ pub fn generate_arp(
         }
         if !note_queue.is_empty() {
             for variance in 0..4 {
+                // pause between notes, consider adding another control paramter
+                // to change this, in order to change speed (i.e. fader or knob
                 sleep(Duration::from_millis(100));
-
-                // consider creating a variable to change
                 play_note(random_note(&note_queue, variance));
             }
         }
@@ -224,7 +221,7 @@ pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
     let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
-    //here make sure value doesn't exceed potential values
+                                              //here make sure value doesn't exceed potential values
     let note = frame[base_note] as i8 + variance[index]; // add change in octave to generated note
     note as u8
 }
