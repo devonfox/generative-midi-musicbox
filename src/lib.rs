@@ -21,7 +21,7 @@ use wmidi::*;
 
 /// Scans midi ports and lets user connect to port of choice, if available
 /// If no ports available, returns an error.
-/// Sourced from the 'midir' crate 'test_play.rs' example
+/// Sourced from the 'midir' crate 'test_play.rs' & 'test_read.rs' examples
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("Main MIDI Output")?;
     // channel for sending midi notes
@@ -194,7 +194,7 @@ pub fn generate_arp(
         // notes through channel
         let result = rx.try_recv();
         if let Ok(note) = result {
-            println!("Debug: Note -> {}, Deque Size: {}", note, note_queue.len());
+            println!("Debug: Note -> {}, Deque Size: {}", note as u8, note_queue.len());
             if note_queue.len() == 8 {
                 let _ = note_queue.pop_back();
             }
@@ -220,8 +220,20 @@ pub fn generate_arp(
 pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
     let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
-    let variance: [i8; 4] = [24, 12, 0, -12]; // define change in octave
-                                              //here make sure value doesn't exceed potential values
-    let note = frame[base_note] as i8 + variance[index]; // add change in octave to generated note
+    let variance: [i16; 4] = [24, 12, 0, -12]; // define change in octave
+    let note = {
+        // checking to make sure we have a valid note value
+        assert!(
+            frame[base_note] <= 127 && frame[base_note] > 0,
+            "incoming note value not between 0 and 127"
+        );
+        if frame[base_note] as i16 + variance[index] < 0
+            || frame[base_note] as i16 + variance[index] > 127
+        { 
+            frame[base_note] as i16
+        } else {
+            frame[base_note] as i16 + variance[index]
+        }
+    };
     note as u8
 }
