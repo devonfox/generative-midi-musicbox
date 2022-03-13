@@ -160,7 +160,7 @@ pub fn read(
     )?;
 
     println!(
-        "Input connection open, reading input from '{}' (press enter to stop input) ...",
+        "Input connection open, reading input from '{}' (press enter to stop input): ",
         in_port_name
     );
 
@@ -194,11 +194,12 @@ pub fn generate_arp(
         // notes through channel
         let result = rx.try_recv();
         if let Ok(note) = result {
-            println!("Debug: Note -> {}, Deque Size: {}", note as u8, note_queue.len());
             if note_queue.len() == 8 {
                 let _ = note_queue.pop_back();
             }
             let _ = note_queue.push_front(note as u8);
+            //println!("Note -> {}, Note Pool Size: {}", note, note_queue.len());
+            display_note_queue(&note_queue);
         }
         if !note_queue.is_empty() {
             for variance in 0..4 {
@@ -229,11 +230,25 @@ pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
         );
         if frame[base_note] as i16 + variance[index] < 0
             || frame[base_note] as i16 + variance[index] > 127
-        { 
+        {
             frame[base_note] as i16
         } else {
             frame[base_note] as i16 + variance[index]
         }
     };
     note as u8
+}
+
+pub fn display_note_queue(notes: &VecDeque<u8>) {
+    print!("Note Pool: [");
+    let mut index = 0;
+    for note in notes {
+        index += 1;
+        let midi_note = Note::from_u8_lossy(*note);
+        match index == notes.len() {
+            true => print!("{}", midi_note),
+            false => print!("{},", midi_note),
+        }
+    }
+    println!("]\n");
 }
