@@ -1,10 +1,11 @@
-use std::collections::VecDeque;
 use generative_midi_musicbox::*;
+use std::collections::VecDeque;
 
 #[test]
-fn test_random_note() {
+fn test_random_note_bounds() {
     let mut notes: VecDeque<u8> = VecDeque::with_capacity(8);
-    notes.push_back(0);
+
+    notes.push_back(1);
     notes.push_back(10);
     notes.push_back(25);
     notes.push_back(66);
@@ -14,7 +15,8 @@ fn test_random_note() {
     notes.push_back(127);
 
     for variance in 0..4 {
-        random_note(&notes, variance);
+        
+        let note = random_note(&notes, variance);
+        assert!(note > 0 && note <= 127);
     }
-    
 }
