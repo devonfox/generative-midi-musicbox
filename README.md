@@ -4,9 +4,19 @@ A Rust library/binary crate that sends looping randomly generated MIDI signals d
 
 ## Dependencies
 
-* Midir - Create MIDI input and output connections
-* Wmidi - Enum data for manipulating MIDI messages
+* [Midir 0.7.0](https://crates.io/crates/midir) - Create MIDI input and output connections
+* [Wmidi 4.0.4](https://crates.io/crates/wmidi) - Enum data for manipulating MIDI messages
 * Rand - Random Number Generation
+
+## Build and Run instructions
+
+#### Windows / Mac
+
+*todo!*
+
+#### Linux / Raspberry Pi
+
+*todo!*
 
 ## Planning and Implementation
 
@@ -18,7 +28,8 @@ A Rust library/binary crate that sends looping randomly generated MIDI signals d
 * [ ] Rewrite and organize now that I understand the complete flow
 * [ ] Write instructions for running on Pi
 * [ ] Write unit tests in tests folder
-* [ ] Fill out README a bit more
+* [x] Fill out README a bit more
 
 ## Stretch Goals
+* [ ] Create midi message stop condition instead of keyboard input of 'enter'
 * [ ] Implement control over speed of randomly generated arpeggio
