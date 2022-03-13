@@ -25,20 +25,25 @@ use wmidi::*;
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("Main MIDI Output")?;
     let out_ports = midi_out.ports();
-    let out_port: &MidiOutputPort = 0;
+    let out_port = out_ports[0];
     let mut midi_in = MidiInput::new("midir reading input")?;
-    open(midi_in, midi_out)?;
+    let in_ports = midi_in.ports();
+    let in_port = in_ports[0];
+    match open(midi_in, in_ports, &in_port, midi_out, out_ports, &out_port) {
+        Ok(_) => (),
+        Err(err) => return Err(err),
+    }
     // channel for sending midi notes
     let (tx, rx): (Sender<Note>, Receiver<Note>) = channel();
 
     // channel for sending stop unit message
     let (end_tx, end_rx): (Sender<()>, Receiver<()>) = channel();
     println!("\nOpening output connection");
-    let mut conn_out = midi_out.connect(out_port, "midir-test")?;
+    let mut conn_out = midi_out.connect(&out_port, "midir-test")?;
     let atomicstop = Arc::new(AtomicBool::new(false));
     let stopflag = atomicstop.clone();
 
-    let in_port_name = midi_in.port_name(in_port)?;
+    let in_port_name = midi_in.port_name(&in_port)?;
     let in_port = in_port.clone();
 
     // creating a thread to handle midi output
@@ -89,8 +94,7 @@ pub fn open(
     in_port: &MidiInputPort,
     midi_out: MidiOutput,
     out_ports: Vec<MidiOutputPort>,
-    out_port: &MidiOutputPort,
-    end_rx: Receiver<()>
+    out_port: &MidiOutputPort
 ) -> Result<(), Box<dyn Error>> {
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
@@ -122,9 +126,9 @@ pub fn open(
     let in_ports = midi_in.ports();
     let in_port = match in_ports.len() {
         0 => {
-            println!("Error: No input connection found. Press enter to quit.");
+            println!("Error: No input connection found.");
             let error = Err("closing connections.".into());
-            let _ = end_rx.recv();
+            //let _ = end_rx.recv();
             return error;
         }
         1 => {
