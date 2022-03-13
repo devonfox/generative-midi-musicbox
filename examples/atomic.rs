@@ -2,19 +2,19 @@
 //! Devon Fox - Feb 2022
 //!
 
-use queues::*;
+use std::collections::VecDeque;
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::*;
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 fn main() -> io::Result<()> {
     let atomicstop = Arc::new(AtomicBool::new(false));
-    let (tx, rx): (SyncSender<u64>, Receiver<u64>) = sync_channel(1);
-    let mut chords: Buffer<u64> = Buffer::new(8);
+    let (tx, rx): (Sender<u64>, Receiver<u64>) = channel();
+    let mut chords: VecDeque<u64> = VecDeque::new();
     let stopflag = atomicstop.clone();
     let thr = thread::spawn(move || bg_process(&stopflag, tx));
 
@@ -27,20 +27,20 @@ fn main() -> io::Result<()> {
         let result = rx.recv();
         match result {
             Ok(x) => {
-                if chords.size() == chords.capacity() {
-                    let _ = chords.remove();
+                if chords.len() == 8 {
+                    let _ = chords.pop_back();
                 }
-                let _ = chords.add(x);
+                let _ = chords.push_front(x);
             }
             Err(RecvError) => break,
         }
     }
 
-    println!("{:?}", chords);
+    println!("Last 8: {:?}", chords);
     Ok(())
 }
 
-fn bg_process(atomicstop: &Arc<AtomicBool>, thread_tx: SyncSender<u64>) {
+fn bg_process(atomicstop: &Arc<AtomicBool>, thread_tx: Sender<u64>) {
     let mut count: u64 = 0;
     loop {
         //print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
