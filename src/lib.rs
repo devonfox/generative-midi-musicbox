@@ -25,9 +25,9 @@ use wmidi::*;
 pub fn run() -> Result<(), Box<dyn Error>> {
     let midi_out = MidiOutput::new("Main MIDI Output")?;
     // channel for sending midi notes
-    let (tx, rx): (Sender<Note>, Receiver<Note>) = channel();
+    let note_chan: (Sender<Note>, Receiver<Note>) = channel();
     // channel for sending stop unit message
-    let (end_tx, end_rx): (Sender<()>, Receiver<()>) = channel();
+    let end_chan: (Sender<()>, Receiver<()>) = channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
     let out_port: &MidiOutputPort = match out_ports.len() {
@@ -66,7 +66,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
         0 => {
             println!("Error: No input connection found. Press enter to quit.");
             let error = Err("closing connections.".into());
-            let _ = end_rx.recv();
+            let _ = end_chan.1.recv();
             return error;
         }
         1 => {
@@ -98,15 +98,16 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     // while waiting for user input to stop generation loop
     let gen_thread = spawn(move || {
         println!("Output connection open.");
-        generate_arp(&mut conn_out, &stopflag, rx); // currently generating output connection
+        generate_arp(&mut conn_out, &stopflag, note_chan.1); // currently generating output connection
     });
 
-    let read_thread = spawn(
-        move || match read(&in_port_name, in_port, midi_in, tx, end_rx) {
-            Ok(_) => (),
-            Err(err) => println!("Error: {}", err),
-        },
-    );
+    let read_thread =
+        spawn(
+            move || match read(&in_port_name, in_port, midi_in, note_chan.0, end_chan.1) {
+                Ok(_) => (),
+                Err(err) => println!("Error: {}", err),
+            },
+        );
     // put midi generation menu and/or functions here
     let mut input = String::new();
     let stdin = stdin();
@@ -117,7 +118,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     }; // wait for next enter key press
 
     // signal with atomic to stop receiving, and sending as well
-    let _ = end_tx.send(()); // sending unit () to signal end via channel
+    let _ = end_chan.0.send(()); // sending unit () to signal end via channel
     atomicstop.store(true, Ordering::Relaxed);
     //sleep(Duration::from_millis(150)); // why tf did i put this here
     println!("\nClosing output connection");
@@ -240,6 +241,7 @@ pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
 }
 
 pub fn display_note_queue(notes: &VecDeque<u8>) {
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
     print!("Note Pool: [");
     let mut index = 0;
     for note in notes {

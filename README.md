@@ -12,7 +12,7 @@ A Rust library/binary crate that sends looping randomly generated MIDI signals d
 
 #### Windows / Mac
 
-*todo!*
+Build and run using cargo: `cargo run`
 
 #### Linux / Raspberry Pi
 
@@ -34,5 +34,3 @@ A Rust library/binary crate that sends looping randomly generated MIDI signals d
 * [ ] Create midi message stop condition instead of keyboard input of 'enter'
 * [ ] Implement control over speed of randomly generated arpeggio
 * [ ] Expand Arpeggiator features (i.e. varying styles)
-
-## 
