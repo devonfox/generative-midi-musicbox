@@ -22,7 +22,8 @@ use wmidi::*;
 /// Scans midi ports and lets user connect to port of choice, if available
 /// If no ports available, returns an error.
 /// Sourced from the 'midir' crate 'test_play.rs' & 'test_read.rs' examples
-pub fn run() -> Result<(), Box<dyn Error>> {
+pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
+
     let midi_out = MidiOutput::new("Main MIDI Output")?;
     // channel for sending midi notes
     let note_chan: (Sender<Note>, Receiver<Note>) = channel();
@@ -30,6 +31,7 @@ pub fn run() -> Result<(), Box<dyn Error>> {
     let end_chan: (Sender<()>, Receiver<()>) = channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
+    
     let out_port: &MidiOutputPort = match out_ports.len() {
         0 => return Err("no output port found".into()),
         1 => {
@@ -40,17 +42,25 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             &out_ports[0]
         }
         _ => {
-            println!("\nAvailable output ports:");
-            for (i, p) in out_ports.iter().enumerate() {
-                println!("{}: {}", i, midi_out.port_name(p).unwrap());
+            match args.len() > 2 {
+                true => out_ports
+                .get(args[1].trim().parse::<usize>()?)
+                .ok_or("invalid output port selected")?,
+                false => {
+                    println!("\nAvailable output ports:");
+                    for (i, p) in out_ports.iter().enumerate() {
+                        println!("{}: {}", i, midi_out.port_name(p).unwrap());
+                    }
+                    print!("Please select output port: ");
+                    stdout().flush()?;
+                    let mut input = String::new();
+                    stdin().read_line(&mut input)?;
+                    out_ports
+                        .get(input.trim().parse::<usize>()?)
+                        .ok_or("invalid output port selected")?
+                }
             }
-            print!("Please select output port: ");
-            stdout().flush()?;
-            let mut input = String::new();
-            stdin().read_line(&mut input)?;
-            out_ports
-                .get(input.trim().parse::<usize>()?)
-                .ok_or("invalid output port selected")?
+            
         }
     };
 
@@ -77,17 +87,25 @@ pub fn run() -> Result<(), Box<dyn Error>> {
             &in_ports[0]
         }
         _ => {
-            println!("\nAvailable input ports:");
-            for (i, p) in in_ports.iter().enumerate() {
-                println!("{}: {}", i, midi_in.port_name(p).unwrap());
+            match args.len() > 2 {
+                true => in_ports
+                .get(args[2].trim().parse::<usize>()?) // investigate
+                .ok_or("invalid input port selected")?,
+                false => {
+                    println!("\nAvailable input ports:");
+                    for (i, p) in in_ports.iter().enumerate() {
+                        println!("{}: {}", i, midi_in.port_name(p).unwrap());
+                    }
+                    print!("Please select input port: ");
+                    stdout().flush()?;
+                    let mut input = String::new();
+                    stdin().read_line(&mut input)?;
+                    in_ports
+                        .get(input.trim().parse::<usize>()?) // investigate
+                        .ok_or("invalid input port selected")?
+                }
             }
-            print!("Please select input port: ");
-            stdout().flush()?;
-            let mut input = String::new();
-            stdin().read_line(&mut input)?;
-            in_ports
-                .get(input.trim().parse::<usize>()?) // investigate
-                .ok_or("invalid input port selected")?
+            
         }
     };
     midi_in.ignore(Ignore::None);
