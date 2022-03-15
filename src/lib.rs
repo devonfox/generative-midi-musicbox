@@ -1,4 +1,4 @@
-//! Genmidi Library Crate
+//! Generative-Midi-Musicbox Library Crate
 //!
 //! Devon Fox 2022
 
@@ -24,10 +24,11 @@ use wmidi::*;
 /// Sourced from the 'midir' crate 'test_play.rs' & 'test_read.rs' examples
 pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
 
+    // create an instance of a midi output
     let midi_out = MidiOutput::new("Main MIDI Output")?;
     // channel for sending midi notes
     let note_chan: (Sender<Note>, Receiver<Note>) = channel();
-    // channel for sending stop unit message
+    // channel for sending stop unit message to stop running threads
     let end_chan: (Sender<()>, Receiver<()>) = channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
@@ -45,7 +46,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
             match args.len() > 2 {
                 true => out_ports
                 .get(args[1].trim().parse::<usize>()?)
-                .ok_or("invalid output port selected")?,
+                .ok_or("invalid argument given for output port selected")?,
                 false => {
                     println!("\nAvailable output ports:");
                     for (i, p) in out_ports.iter().enumerate() {
@@ -60,7 +61,6 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
                         .ok_or("invalid output port selected")?
                 }
             }
-            
         }
     };
 
@@ -76,7 +76,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
         0 => {
             println!("Error: No input connection found. Press enter to quit.");
             let error = Err("closing connections.".into());
-            let _ = end_chan.1.recv();
+            let _ = end_chan.1.recv(); // closing end channel if error
             return error;
         }
         1 => {
@@ -89,8 +89,8 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
         _ => {
             match args.len() > 2 {
                 true => in_ports
-                .get(args[2].trim().parse::<usize>()?) // investigate
-                .ok_or("invalid input port selected")?,
+                .get(args[2].trim().parse::<usize>()?)
+                .ok_or("invalid arguments given for input port selected")?,
                 false => {
                     println!("\nAvailable input ports:");
                     for (i, p) in in_ports.iter().enumerate() {
@@ -104,8 +104,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
                         .get(input.trim().parse::<usize>()?) // investigate
                         .ok_or("invalid input port selected")?
                 }
-            }
-            
+            } 
         }
     };
     midi_in.ignore(Ignore::None);
@@ -116,7 +115,9 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
     // while waiting for user input to stop generation loop
     let gen_thread = spawn(move || {
         println!("Output connection open.");
-        generate_arp(&mut conn_out, &stopflag, note_chan.1); // currently generating output connection
+        // generating random arp midi to output
+        // while reading input
+        generate_arp(&mut conn_out, &stopflag, note_chan.1); 
     });
 
     let read_thread =
@@ -126,14 +127,13 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
                 Err(err) => println!("Error: {}", err),
             },
         );
-    // put midi generation menu and/or functions here
     let mut input = String::new();
     let stdin = stdin();
     input.clear();
     match stdin.read_line(&mut input) {
         Ok(_) => println!("Ending program..."),
         Err(err) => println!("Error: {}", err),
-    }; // wait for next enter key press
+    }; // wait for next enter key press to end program
 
     // signal with atomic to stop receiving, and sending as well
     let _ = end_chan.0.send(()); // sending unit () to signal end via channel
@@ -156,7 +156,6 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
 
 /// Reads midi input and sends the midi notes parsed from midi messages through
 /// channels to our output midi function operating in a separate thread.
-///
 pub fn read(
     in_port_name: &str,
     in_port: MidiInputPort,
@@ -190,6 +189,7 @@ pub fn read(
 }
 
 /// Generates a random arpeggio and updates the mutable output 'connect'
+/// Receives midi notes from the read midi input function 'read()'
 pub fn generate_arp(
     connect: &mut MidiOutputConnection,
     atomicstop: &Arc<AtomicBool>,
@@ -217,7 +217,6 @@ pub fn generate_arp(
                 let _ = note_queue.pop_back();
             }
             let _ = note_queue.push_front(note as u8);
-            //println!("Note -> {}, Note Pool Size: {}", note, note_queue.len());
             display_note_queue(&note_queue);
         }
         if !note_queue.is_empty() {
@@ -239,6 +238,8 @@ pub fn generate_arp(
 /// generating
 pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
+    // base note chooses a random note in the VecDeque to seed 
+    // before variance is applied
     let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i16; 4] = [24, 12, 0, -12]; // define change in octave
     let note = {
@@ -258,6 +259,7 @@ pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     note as u8
 }
 
+/// Displays contents of current note pool for source of generation to user
 pub fn display_note_queue(notes: &VecDeque<u8>) {
     print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
     print!("Note Pool: [");
