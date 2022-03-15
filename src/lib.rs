@@ -23,7 +23,6 @@ use wmidi::*;
 /// If no ports available, returns an error.
 /// Sourced from the 'midir' crate 'test_play.rs' & 'test_read.rs' examples
 pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
-
     // create an instance of a midi output
     let midi_out = MidiOutput::new("Main MIDI Output")?;
     // channel for sending midi notes
@@ -32,7 +31,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
     let end_chan: (Sender<()>, Receiver<()>) = channel();
     // Get an output port (read from console if multiple are available)
     let out_ports = midi_out.ports();
-    
+
     let out_port: &MidiOutputPort = match out_ports.len() {
         0 => return Err("no output port found".into()),
         1 => {
@@ -42,26 +41,24 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
             );
             &out_ports[0]
         }
-        _ => {
-            match args.len() > 2 {
-                true => out_ports
+        _ => match args.len() > 2 {
+            true => out_ports
                 .get(args[1].trim().parse::<usize>()?)
                 .ok_or("invalid argument given for output port selected")?,
-                false => {
-                    println!("\nAvailable output ports:");
-                    for (i, p) in out_ports.iter().enumerate() {
-                        println!("{}: {}", i, midi_out.port_name(p).unwrap());
-                    }
-                    print!("Please select output port: ");
-                    stdout().flush()?;
-                    let mut input = String::new();
-                    stdin().read_line(&mut input)?;
-                    out_ports
-                        .get(input.trim().parse::<usize>()?)
-                        .ok_or("invalid output port selected")?
+            false => {
+                println!("\nAvailable output ports:");
+                for (i, p) in out_ports.iter().enumerate() {
+                    println!("{}: {}", i, midi_out.port_name(p).unwrap());
                 }
+                print!("Please select output port: ");
+                stdout().flush()?;
+                let mut input = String::new();
+                stdin().read_line(&mut input)?;
+                out_ports
+                    .get(input.trim().parse::<usize>()?)
+                    .ok_or("invalid output port selected")?
             }
-        }
+        },
     };
 
     println!("\nOpening output connection");
@@ -89,8 +86,8 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
         _ => {
             match args.len() > 2 {
                 true => in_ports
-                .get(args[2].trim().parse::<usize>()?)
-                .ok_or("invalid arguments given for input port selected")?,
+                    .get(args[2].trim().parse::<usize>()?)
+                    .ok_or("invalid arguments given for input port selected")?,
                 false => {
                     println!("\nAvailable input ports:");
                     for (i, p) in in_ports.iter().enumerate() {
@@ -104,7 +101,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
                         .get(input.trim().parse::<usize>()?) // investigate
                         .ok_or("invalid input port selected")?
                 }
-            } 
+            }
         }
     };
     midi_in.ignore(Ignore::None);
@@ -117,7 +114,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
         println!("Output connection open.");
         // generating random arp midi to output
         // while reading input
-        generate_arp(&mut conn_out, &stopflag, note_chan.1); 
+        generate_arp(&mut conn_out, &stopflag, note_chan.1);
     });
 
     let read_thread =
@@ -238,7 +235,7 @@ pub fn generate_arp(
 /// generating
 pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
     assert!(index < 4, "invalid variance index");
-    // base note chooses a random note in the VecDeque to seed 
+    // base note chooses a random note in the VecDeque to seed
     // before variance is applied
     let base_note: usize = rand::thread_rng().gen_range(0..frame.len());
     let variance: [i16; 4] = [24, 12, 0, -12]; // define change in octave
