@@ -26,6 +26,12 @@ sudo apt install libasound2-dev
 ```
 Then make sure cargo/rust is up-to-date and build and run with: `cargo run`
 
+## Audio Examples
+
+*I included some audio examples of the Rust crate in use with a Sequential Prophet Rev2.*
+
+* [Audio Examples](https://soundcloud.com/foxdevpdx/sets/generative-midi-musicbox)
+
 ## Planning and Implementation
 
 * [x] Use enum for note names
