@@ -24,10 +24,11 @@ fn test_random_note_bounds() {
     notes.push_back(90);
     notes.push_back(110);
     notes.push_back(127);
-
-    for variance in 0..4 {
-        let note = random_note(&notes, variance);
-        assert!(note > 0 && note <= 127);
+    for _i in 0..300 {
+        for variance in 0..4 {
+            let note = random_note(&notes, variance);
+            assert!(note > 0 && note <= 127);
+        }
     }
 }
 
@@ -47,11 +48,14 @@ fn test_generate_arp() -> Result<(), Box<dyn Error>> {
         generate_arp(&mut conn_out, &stopflag, note_chan.1);
     });
 
-    let note_queue = vec![60, 64, 67, 69, 72, 76, 79, 84, 50];
+    let note_queue = vec![60, 64, 67, 69, 72, 76, 79, 84, 50, 53];
 
     for note in note_queue {
         let _ = note_chan.0.send(Note::from_u8_lossy(note));
     }
+
+    // runs for 10 seconds to account for purposely slow note buffer.
+    // todo: add a arp generation speed for quicker testing (or quicker arps!)
     sleep(Duration::from_secs(10));
     atomicstop.store(true, Ordering::Relaxed);
     match gen_thread.join() {
