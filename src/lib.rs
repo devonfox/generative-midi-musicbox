@@ -260,11 +260,10 @@ pub fn random_note(frame: &VecDeque<u8>, index: usize) -> u8 {
 pub fn display_note_queue(notes: &VecDeque<u8>) {
     print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
     print!("Note Pool: [");
-    let mut index = 0;
-    for note in notes {
-        index += 1;
+
+    for (i, note) in notes.iter().enumerate() {
         let midi_note = Note::from_u8_lossy(*note);
-        match index == notes.len() {
+        match i + 1 == notes.len() {
             true => print!("{}", midi_note),
             false => print!("{},", midi_note),
         }
