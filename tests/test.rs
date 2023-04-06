@@ -45,7 +45,7 @@ fn test_generate_arp() -> Result<(), Box<dyn Error>> {
 
     let gen_thread = spawn(move || {
         println!("Output connection open.");
-        generate_arp(&mut conn_out, &stopflag, note_chan.1);
+        generate_arp(&mut conn_out, &stopflag, note_chan.1, 120);
     });
 
     let note_queue = vec![60, 64, 67, 69, 72, 76, 79, 84, 50, 53];

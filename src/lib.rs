@@ -114,7 +114,7 @@ pub fn run(args: Vec<String>) -> Result<(), Box<dyn Error>> {
         println!("Output connection open.");
         // generating random arp midi to output
         // while reading input
-        generate_arp(&mut conn_out, &stopflag, note_chan.1);
+        generate_arp(&mut conn_out, &stopflag, note_chan.1, 120);
     });
 
     let read_thread =
@@ -191,15 +191,26 @@ pub fn generate_arp(
     connect: &mut MidiOutputConnection,
     atomicstop: &Arc<AtomicBool>,
     rx: Receiver<Note>,
+    bpm: u32,
 ) {
     // A data structure used to hold our FIFO 8 note collection
     let mut note_queue: VecDeque<u8> = VecDeque::new();
+
+    // Closure to calc approx bpm, with correction (due to processing? not sure how to fix)
+    let bpm_to_ms = |bpm: u32, correction_factor: f64| -> u64 {
+        let og_duration = 15_000.0 / (bpm as f64);
+        let corrected_duration = og_duration * correction_factor;
+        corrected_duration as u64
+    };
+
+    let correction_factor: f64 = 0.9; // Adjust to get it as close as possible
+    let note_duration = bpm_to_ms(bpm, correction_factor);
 
     let mut play_note = |note: u8| {
         let rand_vel = rand::thread_rng().gen_range(0..100);
         let _ = connect.send(&[144, note, rand_vel]);
         // note length
-        sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(note_duration));
         let _ = connect.send(&[128, note, rand_vel]);
     };
 
@@ -220,7 +231,7 @@ pub fn generate_arp(
             for variance in 0..4 {
                 // pause between notes, consider adding another control paramter
                 // to change this, in order to change speed (i.e. fader or knob
-                sleep(Duration::from_millis(100));
+                sleep(Duration::from_millis(note_duration));
                 play_note(random_note(&note_queue, variance));
             }
         }
